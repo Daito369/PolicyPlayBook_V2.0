@@ -2409,6 +2409,11 @@ function renderLocalLivePreview(templateContent, formData) {
     content = content.replace(/\{\{\s*footer\s*\}\}/g, '');
     content = content.replace(/\{\{\s*disclaimer\s*\}\}/g, '');
 
+    // 空行の整理（バックエンドと同じロジック）
+    // 3つ以上の連続する改行を1つに減らす（disclaimerやfooterが空の場合の余分な空行を削除）
+    // 意図的な段落分け（2つの改行 = 1つの空行）は保持される
+    content = content.replace(/\n{3,}/g, '\n');
+
     // 改行をHTMLに変換
     return content.replace(/\n/g, '<br>');
 }
@@ -2580,6 +2585,11 @@ function convertTemplateToPlainText(templateContent, formData) {
     // 含まれている可能性があるため、ここで確実に削除する
     content = content.replace(/\{\{\s*footer\s*\}\}/g, '');
     content = content.replace(/\{\{\s*disclaimer\s*\}\}/g, '');
+
+    // 空行の整理（バックエンドと同じロジック）
+    // 3つ以上の連続する改行を1つに減らす（disclaimerやfooterが空の場合の余分な空行を削除）
+    // 意図的な段落分け（2つの改行 = 1つの空行）は保持される
+    content = content.replace(/\n{3,}/g, '\n');
 
     return content;
 }

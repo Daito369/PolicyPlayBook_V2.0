@@ -578,7 +578,9 @@ class TemplateEngine {
     processed = processed.replace(/\{\{\s*disclaimer\s*\}\}/g, '');
 
     // 空行の整理
-    processed = processed.replace(/\n\s*\n\s*\n/g, '\n\n');
+    // 3つ以上の連続する改行を1つに減らす（disclaimerやfooterが空の場合の余分な空行を削除）
+    // 意図的な段落分け（2つの改行 = 1つの空行）は保持される
+    processed = processed.replace(/\n{3,}/g, '\n');
 
     // 先頭末尾の空白削除
     processed = processed.trim();
