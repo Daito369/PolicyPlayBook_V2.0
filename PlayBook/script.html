@@ -1,0 +1,2611 @@
+<script>
+/**
+ * PolicyPlayBook - フロントエンド JavaScript
+ * 高度なUI/UX、リアルタイム処理、エラーハンドリングを提供
+ * 
+ * @version 1.0.0
+ * @author PolicyPlayBook Team
+ * @description モダンなWebアプリケーションUI
+ */
+
+// グローバル変数
+let currentTemplate = null;
+let currentVariables = [];
+let activeFooter = null;  // アクティブなフッター情報
+let isDarkMode = false;
+let isGenerating = false;
+let generationStartTime = null;
+let recentTemplates = [];
+let userSettings = {};
+let systemStatus = { status: 'ready', message: 'Ready' };
+
+// 検索機能用のグローバル変数
+let allTemplatesData = [];  // 全テンプレートデータ（検索用）
+let currentCategoryTemplates = [];  // 現在選択されているカテゴリのテンプレート
+
+// Material 3 Step Management
+let currentStep = 1;
+const totalSteps = 4;
+
+// DOM要素のキャッシュ
+const elements = {};
+
+// 統計情報
+const stats = {
+    totalGenerated: 0,
+    generatedToday: 0,
+    lastGenerated: null
+};
+
+/**
+ * アプリケーション初期化
+ */
+document.addEventListener('DOMContentLoaded', function() {
+    initializeApp();
+});
+
+/**
+ * アプリケーション初期化
+ */
+async function initializeApp() {
+    try {
+        console.log('PolicyPlayBook初期化開始...');
+        
+        // DOM要素をキャッシュ
+        cacheElements();
+        
+        // 設定読み込み
+        await loadUserSettings();
+        
+        // イベントリスナー設定
+        setupEventListeners();
+        
+        // 初期データ読み込み
+        await loadInitialData();
+        
+        // UI初期化
+        initializeUI();
+        
+        // ローディングスクリーンを非表示
+        hideLoadingScreen();
+        
+        console.log('PolicyPlayBook初期化完了');
+        showToast('success', 'システムが正常に初期化されました', 'アプリケーションの準備が完了しました');
+        
+    } catch (error) {
+        console.error('アプリケーション初期化エラー:', error);
+        showToast('error', '初期化エラー', 'アプリケーションの初期化に失敗しました');
+        hideLoadingScreen();
+    }
+}
+
+/**
+ * DOM要素をキャッシュ
+ */
+function cacheElements() {
+    elements.loadingScreen = document.getElementById('loadingScreen');
+    elements.mainApp = document.getElementById('mainApp');
+    elements.categorySelect = document.getElementById('categorySelect');
+    elements.categorySearch = document.getElementById('categorySearch') || null;
+    elements.categorySearchResults = document.getElementById('categorySearchResults') || null;
+    elements.templateSelect = document.getElementById('templateSelect');
+    elements.templateSearch = document.getElementById('templateSearch') || null;
+    elements.templateSearchResults = document.getElementById('templateSearchResults') || null;
+    elements.templateSearchBar = document.getElementById('templateSearchBar');
+    elements.templateSearchContainer = document.getElementById('templateSearchContainer');
+    elements.templateSearchCount = document.getElementById('templateSearchCount');
+    elements.templateInfo = document.getElementById('templateInfo');
+    elements.currentTemplateName = document.getElementById('currentTemplateName');
+    elements.dynamicFields = document.getElementById('dynamicFields');
+    elements.clearBtn = document.getElementById('clearBtn');
+    elements.generationProgress = document.getElementById('generationProgress') || null;
+    elements.progressBar = document.getElementById('progressBar') || null;
+    elements.progressText = document.getElementById('progressText') || null;
+    elements.copyBtn = document.getElementById('copyBtn'); // ライブプレビューのコピーボタン
+    elements.modeToggle = document.getElementById('modeToggle');
+    elements.statusIndicator = document.getElementById('statusIndicator');
+    elements.statusText = document.getElementById('statusText');
+    elements.totalTemplates = document.getElementById('totalTemplates') || null;
+    elements.generatedToday = document.getElementById('generatedToday') || null;
+    elements.recentTemplates = document.getElementById('recentTemplates') || null;
+    elements.charCount = document.getElementById('charCount');
+    elements.lineCount = document.getElementById('lineCount');
+    elements.processingTime = document.getElementById('processingTime');
+    elements.usedTemplateName = document.getElementById('usedTemplateName');
+    elements.generationTime = document.getElementById('generationTime');
+    elements.helpBtn = document.getElementById('helpBtn');
+    elements.settingsBtn = document.getElementById('settingsBtn');
+    elements.alertContainer = document.getElementById('alertContainer');
+    elements.livePreview = document.getElementById('livePreview');
+}
+
+/**
+ * イベントリスナー設定
+ */
+function setupEventListeners() {
+    // カテゴリ検索（無効化 - セレクトボックスを使用）
+    // setupCategorySearch();
+
+    // テンプレート検索（無効化 - セレクトボックスを使用）
+    // setupTemplateSearch();
+
+    // セレクトボックスイベント
+    elements.categorySelect.addEventListener('change', onCategoryChange);
+    elements.templateSelect.addEventListener('change', onTemplateChange);
+
+    // 検索バーイベント
+    if (elements.templateSearchBar) {
+        elements.templateSearchBar.addEventListener('input', onTemplateSearch);
+    }
+
+    // ボタンイベント
+    elements.clearBtn.addEventListener('click', clearForm);
+
+    // ライブプレビューのコピーボタン
+    if (elements.copyBtn) {
+        elements.copyBtn.addEventListener('click', copyEmail);
+    }
+
+    // UI制御
+    if (elements.modeToggle) {
+        elements.modeToggle.addEventListener('click', toggleDarkMode);
+    }
+    if (elements.helpBtn) {
+        elements.helpBtn.addEventListener('click', showHelp);
+    }
+    const settingsBtn = document.getElementById('settingsBtn');
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', showSettings);
+    }
+
+    // 設定保存
+    const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+    if (saveSettingsBtn) {
+        saveSettingsBtn.addEventListener('click', saveSettings);
+    }
+
+    // キーボードショートカット
+    document.addEventListener('keydown', handleKeyboardShortcuts);
+
+    // フォーカス管理
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('focusout', handleFocusOut);
+
+    // ページ離脱時の確認
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // 検索結果外クリックで閉じる
+    document.addEventListener('click', closeSearchResults);
+}
+
+/**
+ * 初期データ読み込み
+ */
+async function loadInitialData() {
+    try {
+        // サーバーサイドから渡されたデータを使用
+        if (window.INITIAL_DATA) {
+            updateSystemStatus(window.INITIAL_DATA.systemStatus);
+
+            if (window.INITIAL_DATA.categories) {
+                populateCategories(window.INITIAL_DATA.categories);
+            }
+
+            // アクティブなフッター情報を保存
+            if (window.INITIAL_DATA.activeFooter) {
+                activeFooter = window.INITIAL_DATA.activeFooter;
+                console.log('Active footer loaded:', activeFooter);
+            }
+        }
+
+        // 全テンプレートデータを取得（検索機能用）
+        await loadAllTemplatesData();
+
+        // 統計情報を更新
+        await updateStatistics();
+
+        // 最近使用したテンプレートを読み込み
+        loadRecentTemplates();
+
+    } catch (error) {
+        console.error('初期データ読み込みエラー:', error);
+        throw error;
+    }
+}
+
+/**
+ * UI初期化
+ */
+function initializeUI() {
+    // ダークモード設定を適用
+    applyTheme();
+
+    // スクロールイベントでsteps-containerをnavbarに吸い付かせる
+    initializeStepsScrollAnimation();
+
+    // フォーカス管理
+    elements.categorySelect.focus();
+}
+
+/**
+ * Steps Container スクロールアニメーション初期化
+ */
+function initializeStepsScrollAnimation() {
+    const stepsContainer = document.querySelector('.steps-container');
+    const navbar = document.querySelector('.navbar');
+
+    if (!stepsContainer || !navbar) return;
+
+    let lastScrollTop = 0;
+    const scrollThreshold = 20; // スクロール開始の閾値
+    const navbarHeight = navbar.offsetHeight; // Navbarの高さを取得
+
+    window.addEventListener('scroll', () => {
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+
+        // Navbarが完全に隠れたかチェック
+        if (scrollTop >= navbarHeight) {
+            // Navbarが完全に隠れた → Steps-containerを最上部に
+            stepsContainer.classList.add('scrolled');
+            stepsContainer.classList.add('at-top');
+            document.body.classList.add('navbar-hidden');
+        } else if (scrollTop > scrollThreshold && scrollTop > lastScrollTop) {
+            // 下にスクロール中（Navbar部分的に隠れてる）
+            stepsContainer.classList.add('scrolled');
+            stepsContainer.classList.remove('at-top');
+            document.body.classList.remove('navbar-hidden');
+        } else if (scrollTop <= scrollThreshold) {
+            // 上部に戻った
+            stepsContainer.classList.remove('scrolled');
+            stepsContainer.classList.remove('at-top');
+            document.body.classList.remove('navbar-hidden');
+        }
+
+        lastScrollTop = scrollTop;
+    }, { passive: true });
+}
+
+/**
+ * ローディングスクリーンを非表示 (Gmail-style fade-out)
+ */
+function hideLoadingScreen() {
+    // Gmail-style loading: minimum 1.2s display time for branding
+    setTimeout(() => {
+        elements.loadingScreen.classList.add('fade-out');
+        elements.mainApp.classList.remove('d-none');
+        elements.mainApp.classList.add('fade-in');
+
+        // Remove from DOM after fade-out animation completes
+        setTimeout(() => {
+            elements.loadingScreen.style.display = 'none';
+        }, 400); // Match CSS transition duration
+    }, 1200);
+}
+
+/**
+ * カテゴリ選択時の処理（自動リセット機能付き）
+ */
+async function onCategoryChange() {
+    const category = elements.categorySelect.value;
+
+    // 【修正】既存の入力フォームを自動的にリセット
+    if (currentTemplate !== null) {
+        console.log('カテゴリ変更検出: 既存フォームを自動リセット');
+        cleanupLivePreview(); // イベントリスナーをクリーンアップ
+        currentTemplate = null;
+        currentVariables = [];
+        showInitialMessage(); // フォームを初期状態に戻す
+    }
+
+    // 検索バーをリセット
+    if (elements.templateSearchBar) {
+        elements.templateSearchBar.value = '';
+    }
+
+    // UI状態をリセット
+    elements.templateSelect.innerHTML = '<option value="">読み込み中...</option>';
+    elements.templateSelect.disabled = true;
+
+    hideTemplateInfo();
+
+    if (!category) {
+        elements.templateSelect.innerHTML = '<option value="">カテゴリを選択してください</option>';
+        // 検索バーを非表示
+        if (elements.templateSearchContainer) {
+            elements.templateSearchContainer.style.display = 'none';
+        }
+        currentCategoryTemplates = [];
+        updateStep(1); // ステップ1に戻る
+        return;
+    }
+
+    try {
+        showProgress('テンプレートを読み込み中...', 25);
+
+        // サーバーからテンプレート取得
+        const response = await callServerFunction('getTemplates', { category: category });
+
+        console.log('getTemplates response:', response); // デバッグログ
+
+        if (response && response.success && response.data) {
+            // 現在のカテゴリのテンプレートを保存
+            currentCategoryTemplates = response.data.map(template => ({
+                templateId: template.templateId,
+                templateName: template.templateName
+            }));
+
+            populateTemplates(response.data);
+            elements.templateSelect.disabled = false;
+
+            // 検索バーを表示（カテゴリが「不承認」または「Disapproved」の場合のみ）
+            if (elements.templateSearchContainer) {
+                if (category === '不承認' || category === 'Disapproved') {
+                    elements.templateSearchContainer.style.display = 'block';
+                    // 初期件数を表示
+                    updateTemplateSearchCount(currentCategoryTemplates.length);
+                } else {
+                    elements.templateSearchContainer.style.display = 'none';
+                    // 件数表示をクリア
+                    updateTemplateSearchCount(0, true);
+                }
+            }
+
+            showProgress('テンプレートを読み込み完了', 50);
+            // ステップ2に進む
+            updateStep(2);
+        } else {
+            const errorMsg = response?.error || 'テンプレートの取得に失敗しました';
+            console.error('Template fetch failed:', { category, response });
+            throw new Error(errorMsg);
+        }
+
+    } catch (error) {
+        console.error('テンプレート取得エラー:', error);
+        elements.templateSelect.innerHTML = '<option value="">エラーが発生しました</option>';
+
+        // より詳細なエラーメッセージ
+        let userMessage = 'テンプレートの読み込みに失敗しました。';
+
+        // リトライ機構によって自動的に再試行されたことを伝える
+        if (error.message.includes('timeout') || error.message.includes('failed')) {
+            userMessage += '自動リトライも失敗しました。しばらく待ってから再度お試しください。';
+        } else {
+            userMessage += error.message || '再度お試しください。';
+        }
+
+        showToast('error', 'テンプレート取得エラー', userMessage);
+
+        // 検索バーを非表示
+        if (elements.templateSearchContainer) {
+            elements.templateSearchContainer.style.display = 'none';
+        }
+
+        // エラー時はステップを戻す
+        updateStep(1);
+    } finally {
+        hideProgress();
+    }
+}
+
+/**
+ * テンプレート選択時の処理（自動リセット機能付き）
+ */
+async function onTemplateChange() {
+    const templateId = elements.templateSelect.value;
+
+    if (!templateId) {
+        hideTemplateInfo();
+        showInitialMessage();
+        return;
+    }
+
+    // 【修正】テンプレート変更時に既存フォームを自動リセット
+    if (currentTemplate !== null && currentTemplate !== templateId) {
+        console.log('テンプレート変更検出: 既存フォームを自動リセット');
+        cleanupLivePreview(); // イベントリスナーをクリーンアップ
+    }
+
+    try {
+        showProgress('フォームを生成中...', 25);
+
+        // テンプレートコンテンツと変数を並列取得（高速化）
+        const [templateResponse, variablesResponse] = await Promise.all([
+            callServerFunction('getTemplateContent', { templateId: templateId }),
+            callServerFunction('getVariables', { templateId: templateId })
+        ]);
+
+        if (variablesResponse && variablesResponse.success) {
+            currentTemplate = templateId;
+            currentVariables = variablesResponse.data;
+
+            // テンプレートコンテンツを保存（ライブプレビュー用）
+            if (templateResponse && templateResponse.success) {
+                window.currentTemplateContent = templateResponse.content;
+            }
+
+            // テンプレート情報を表示
+            showTemplateInfo(templateId);
+
+            // 動的フォーム生成
+            await generateDynamicForm(variablesResponse.data);
+
+            // ライブプレビューをセットアップ
+            setupLivePreview();
+
+            showProgress('フォーム生成完了', 100);
+
+            // ステップ3に進む
+            updateStep(3);
+
+        } else {
+            throw new Error(variablesResponse && variablesResponse.error ? variablesResponse.error : '変数の取得に失敗しました');
+        }
+
+    } catch (error) {
+        console.error('変数取得エラー:', error);
+        showToast('error', '変数取得エラー', error.message);
+    } finally {
+        hideProgress();
+    }
+}
+
+/**
+ * 動的フォーム生成（エイリアス）
+ */
+async function generateForm(variables) {
+    return await generateDynamicForm(variables);
+}
+
+/**
+ * 動的フォーム生成
+ */
+async function generateDynamicForm(variables) {
+    try {
+        let html = '';
+        
+        if (variables.length === 0) {
+            html = '<div class="alert alert-info"><i class="fas fa-info-circle me-2"></i>このテンプレートには入力項目がありません。</div>';
+        } else {
+            // 必須項目と任意項目を分離
+            const requiredVars = variables.filter(v => v.isRequired);
+            const optionalVars = variables.filter(v => !v.isRequired);
+            
+            if (requiredVars.length > 0) {
+                html += '<h6 class="text-primary mb-3"><i class="fas fa-asterisk me-2"></i>必須項目</h6>';
+                for (const variable of requiredVars) {
+                    html += await generateFieldHTML(variable);
+                }
+            }
+            
+            if (optionalVars.length > 0) {
+                html += '<h6 class="text-secondary mb-3 mt-4"><i class="fas fa-plus-circle me-2"></i>任意項目</h6>';
+                for (const variable of optionalVars) {
+                    html += await generateFieldHTML(variable);
+                }
+            }
+        }
+        
+        elements.dynamicFields.innerHTML = html;
+
+        // セレクトボックスのオプション設定（並列実行で高速化）
+        const selectVariables = variables.filter(v => v.variableType === 'select');
+        if (selectVariables.length > 0) {
+            await Promise.all(
+                selectVariables.map(variable => populateSelectOptions(variable.variableName))
+            );
+        }
+
+        // チェックボックス・ラジオのオプションをキャッシュに保存（ライブプレビュー用）
+        const checkboxRadioVariables = variables.filter(v =>
+            v.variableType === 'checkbox' || v.variableType === 'radio'
+        );
+        if (checkboxRadioVariables.length > 0) {
+            await Promise.all(
+                checkboxRadioVariables.map(async variable => {
+                    const response = await callServerFunction('getOptions', { variableName: variable.variableName });
+                    if (response && response.success) {
+                        variableOptionsCache[variable.variableName] = response.data;
+                    }
+                })
+            );
+        }
+
+        // バリデーション設定
+        setupFormValidation();
+
+        // クリアボタンを表示
+        const clearBtnContainer = document.getElementById('clearBtnContainer');
+        if (clearBtnContainer) {
+            clearBtnContainer.style.display = 'block';
+        }
+
+    } catch (error) {
+        console.error('動的フォーム生成エラー:', error);
+        elements.dynamicFields.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i>フォームの生成に失敗しました</div>';
+    }
+}
+
+/**
+ * 翌営業日をYYYY-MM-DD形式で取得（フロントエンド版）
+ * @return {string} YYYY-MM-DD形式の日付
+ */
+function getNextBusinessDayFormatted() {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // 土日をスキップ（簡易版）
+    while (tomorrow.getDay() === 0 || tomorrow.getDay() === 6) {
+        tomorrow.setDate(tomorrow.getDate() + 1);
+    }
+
+    // YYYY-MM-DD形式に変換
+    const year = tomorrow.getFullYear();
+    const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+    const day = String(tomorrow.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+}
+
+/**
+ * フィールドHTML生成
+ */
+async function generateFieldHTML(variable) {
+    const required = variable.isRequired ? 'required' : '';
+    const requiredLabel = variable.isRequired ? '<span class="text-danger">*</span>' : '';
+    const helpText = variable.helpText ? `<div class="form-text">${variable.helpText}</div>` : '';
+
+    // デフォルト値の決定（myName変数の場合、userSettings.defaultNameを優先）
+    let defaultValue = variable.defaultValue || '';
+    if (variable.variableName === 'myName' && userSettings.defaultName) {
+        defaultValue = userSettings.defaultName;
+    }
+
+    // replyDate の場合、翌営業日をデフォルトに設定
+    if (variable.variableName === 'replyDate' && variable.variableType === 'date' && !defaultValue) {
+        defaultValue = getNextBusinessDayFormatted();
+    }
+
+    let fieldHTML = '';
+
+    switch (variable.variableType) {
+        case 'text':
+            // contactNameフィールドにはautocomplete="off"を追加してブラウザの自動補完を無効化
+            const autocompleteAttr = variable.variableName === 'contactName' ? 'autocomplete="off"' : '';
+            fieldHTML = `
+                <input type="text"
+                       class="form-control"
+                       id="${variable.variableName}"
+                       name="${variable.variableName}"
+                       placeholder="${variable.placeholder || ''}"
+                       ${required}
+                       ${variable.validationRule ? `pattern="${variable.validationRule}"` : ''}
+                       value="${defaultValue}"
+                       ${autocompleteAttr}
+                       data-variable-type="text">
+            `;
+            break;
+            
+        case 'email':
+            fieldHTML = `
+                <input type="email"
+                       class="form-control"
+                       id="${variable.variableName}"
+                       name="${variable.variableName}"
+                       placeholder="${variable.placeholder || ''}"
+                       ${required}
+                       value="${defaultValue}"
+                       data-variable-type="email">
+            `;
+            break;
+
+        case 'tel':
+            fieldHTML = `
+                <input type="tel"
+                       class="form-control"
+                       id="${variable.variableName}"
+                       name="${variable.variableName}"
+                       placeholder="${variable.placeholder || ''}"
+                       ${required}
+                       value="${defaultValue}"
+                       data-variable-type="tel">
+            `;
+            break;
+
+        case 'number':
+            fieldHTML = `
+                <input type="number"
+                       class="form-control"
+                       id="${variable.variableName}"
+                       name="${variable.variableName}"
+                       placeholder="${variable.placeholder || ''}"
+                       ${required}
+                       value="${defaultValue}"
+                       data-variable-type="number">
+            `;
+            break;
+
+        case 'textarea':
+            fieldHTML = `
+                <textarea class="form-control"
+                          id="${variable.variableName}"
+                          name="${variable.variableName}"
+                          rows="4"
+                          placeholder="${variable.placeholder || ''}"
+                          ${required}
+                          data-variable-type="textarea">${defaultValue}</textarea>
+            `;
+            break;
+            
+        case 'select':
+            fieldHTML = `
+                <select class="form-select" 
+                        id="${variable.variableName}" 
+                        name="${variable.variableName}"
+                        ${required}
+                        data-variable-type="select">
+                    <option value="">選択してください</option>
+                </select>
+            `;
+            break;
+            
+        case 'date':
+            fieldHTML = `
+                <input type="date"
+                       class="form-control"
+                       id="${variable.variableName}"
+                       name="${variable.variableName}"
+                       ${required}
+                       value="${defaultValue}"
+                       data-variable-type="date">
+            `;
+            break;
+
+        case 'datetime-local':
+            fieldHTML = `
+                <input type="datetime-local"
+                       class="form-control"
+                       id="${variable.variableName}"
+                       name="${variable.variableName}"
+                       ${required}
+                       value="${defaultValue}"
+                       data-variable-type="datetime-local">
+            `;
+            break;
+
+        case 'checkbox':
+            fieldHTML = `
+                <div class="form-check">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           id="${variable.variableName}"
+                           name="${variable.variableName}"
+                           ${defaultValue === 'true' ? 'checked' : ''}
+                           data-variable-type="checkbox">
+                    <label class="form-check-label" for="${variable.variableName}">
+                        ${variable.displayName}
+                    </label>
+                </div>
+            `;
+            break;
+
+        case 'radio':
+            // ラジオボタンはオプションが必要
+            fieldHTML = `
+                <div class="form-check">
+                    <input class="form-check-input"
+                           type="radio"
+                           id="${variable.variableName}"
+                           name="${variable.variableName}"
+                           value="${defaultValue}"
+                           data-variable-type="radio">
+                    <label class="form-check-label" for="${variable.variableName}">
+                        ${variable.displayName}
+                    </label>
+                </div>
+            `;
+            break;
+
+        case 'range':
+            fieldHTML = `
+                <input type="range"
+                       class="form-range"
+                       id="${variable.variableName}"
+                       name="${variable.variableName}"
+                       min="0"
+                       max="100"
+                       value="${defaultValue || '50'}"
+                       data-variable-type="range">
+                <div class="d-flex justify-content-between">
+                    <small class="text-muted">0</small>
+                    <small class="text-muted">100</small>
+                </div>
+            `;
+            break;
+
+        default:
+            fieldHTML = `
+                <input type="text"
+                       class="form-control"
+                       id="${variable.variableName}"
+                       name="${variable.variableName}"
+                       placeholder="${variable.placeholder || ''}"
+                       ${required}
+                       value="${defaultValue}"
+                       data-variable-type="text">
+            `;
+            break;
+    }
+    
+    if (variable.variableType === 'checkbox') {
+        return `
+            <div class="mb-3">
+                ${fieldHTML}
+                ${helpText}
+                <div class="invalid-feedback"></div>
+                <div class="valid-feedback"></div>
+            </div>
+        `;
+    } else {
+        return `
+            <div class="mb-3">
+                <label for="${variable.variableName}" class="form-label">
+                    ${variable.displayName} ${requiredLabel}
+                </label>
+                ${fieldHTML}
+                ${helpText}
+                <div class="invalid-feedback"></div>
+                <div class="valid-feedback"></div>
+            </div>
+        `;
+    }
+}
+
+/**
+ * セレクトボックスオプション設定
+ */
+// オプションデータのキャッシュ（value→label変換用）
+const variableOptionsCache = {};
+
+async function populateSelectOptions(variableName) {
+    try {
+        const response = await callServerFunction('getOptions', { variableName: variableName });
+
+        if (response && response.success) {
+            const selectElement = document.getElementById(variableName);
+
+            if (selectElement && response.data.length > 0) {
+                // オプションデータをキャッシュに保存
+                variableOptionsCache[variableName] = response.data;
+
+                // 既存のオプションをクリア（最初の選択してくださいは保持）
+                selectElement.innerHTML = '<option value="">選択してください</option>';
+
+                response.data.forEach(option => {
+                    const optionElement = document.createElement('option');
+                    optionElement.value = option.value;
+                    optionElement.textContent = option.label;
+                    selectElement.appendChild(optionElement);
+                });
+            }
+        }
+    } catch (error) {
+        console.error('オプション取得エラー:', error);
+    }
+}
+
+/**
+ * メール生成
+ */
+async function generateEmail() {
+    if (!currentTemplate) {
+        showToast('error', 'テンプレートエラー', 'テンプレートが選択されていません');
+        return;
+    }
+    
+    if (isGenerating) {
+        showToast('warning', '生成中', 'メールを生成中です。しばらくお待ちください。');
+        return;
+    }
+    
+    try {
+        isGenerating = true;
+        generationStartTime = Date.now();
+        
+        // UI状態を更新
+        updateGenerationState(true);
+        
+        // フォームデータ収集
+        let formData = collectFormData();
+        
+        // バリデーション
+        if (!validateForm(formData)) {
+            isGenerating = false;
+            updateGenerationState(false);
+            return;
+        }
+        
+        showProgress('メール生成中...', 25);
+        
+        // メール生成API呼び出し
+        let requestData = {
+            templateId: currentTemplate,
+            variables: formData
+        };
+        
+        let response = await callServerFunction('generateEmail', requestData);
+        
+        showProgress('メール生成中...', 75);
+        
+        if (response && response.success) {
+            displayEmail(response);
+            saveFormData();
+            addToRecentTemplates(currentTemplate);
+            updateStatistics();
+            
+            showProgress('メール生成完了', 100);
+            showToast('success', 'メール生成完了', 'メールが正常に生成されました');
+            
+        } else {
+            throw new Error(response && response.error ? response.error : 'メール生成に失敗しました');
+        }
+        
+    } catch (error) {
+        console.error('メール生成エラー:', error);
+        showToast('error', 'メール生成エラー', error.message);
+    } finally {
+        isGenerating = false;
+        updateGenerationState(false);
+        hideProgress();
+    }
+}
+
+/**
+ * メールプレビュー
+ */
+async function previewEmail() {
+    if (!currentTemplate) {
+        showToast('error', 'テンプレートエラー', 'テンプレートが選択されていません');
+        return;
+    }
+    
+    try {
+        // フォームデータ収集
+        const formData = collectFormData();
+        
+        // 簡易プレビュー生成
+        const preview = generatePreview(formData);
+        
+        // モーダルでプレビュー表示
+        showPreviewModal(preview);
+        
+    } catch (error) {
+        console.error('プレビューエラー:', error);
+        showToast('error', 'プレビューエラー', error.message);
+    }
+}
+
+/**
+ * フォームデータ収集
+ */
+function collectFormData() {
+    const formData = {};
+    const form = document.getElementById('emailForm');
+    const inputs = form.querySelectorAll('input, select, textarea');
+
+    inputs.forEach(input => {
+        // input.idではなくinput.nameを使用（nameが変数名と一致）
+        const fieldName = input.name || input.id;
+        if (!fieldName) return;
+
+        // ラジオボタンの場合、既に値が設定されていて、現在のラジオがチェックされていない場合はスキップ
+        if (input.type === 'radio') {
+            if (!input.checked) {
+                return;
+            }
+        }
+
+        const value = getInputValue(input);
+
+        // チェックボックスの場合、チェックされていればtrue、されていなければfalseを設定
+        if (input.type === 'checkbox') {
+            formData[fieldName] = input.checked;
+            return;
+        }
+
+        // 値がnullの場合はスキップ（ラジオボタンの未選択など）
+        if (value === null) {
+            return;
+        }
+
+        // 既に同じ名前のフィールドがある場合は上書き（最後の値を使用）
+        formData[fieldName] = value;
+    });
+
+    console.log('Collected form data:', formData);
+    return formData;
+}
+
+/**
+ * 入力値取得
+ */
+function getInputValue(input) {
+    switch (input.type) {
+        case 'checkbox':
+            // チェックボックス: boolean値を返す
+            return input.checked;
+        case 'radio':
+            // ラジオボタン: 選択されている場合のみ値を返す
+            return input.checked ? input.value : null;
+        case 'number':
+            // 数値: 文字列として返す（テンプレートでの表示用）
+            return input.value;
+        case 'range':
+            // レンジ: 文字列として返す
+            return input.value;
+        default:
+            return input.value;
+    }
+}
+
+/**
+ * フォームバリデーション
+ */
+function validateForm(formData) {
+    const form = document.getElementById('emailForm');
+    const inputs = form.querySelectorAll('input, select, textarea');
+    let isValid = true;
+    
+    inputs.forEach(input => {
+        const isInputValid = validateInput(input, formData[input.id]);
+        if (!isInputValid) {
+            isValid = false;
+        }
+    });
+    
+    return isValid;
+}
+
+/**
+ * 個別入力バリデーション
+ */
+function validateInput(input, value) {
+    const variable = currentVariables.find(v => v.variableName === input.id);
+    if (!variable) return true;
+    
+    let isValid = true;
+    let errorMessage = '';
+    
+    // 必須チェック
+    if (variable.isRequired && typeof value !== 'boolean' && (!value || value.toString().trim() === '')) {
+        isValid = false;
+        errorMessage = `${variable.displayName}は必須項目です`;
+    }
+    
+    // 特別バリデーション（パターンチェックより優先）
+    if (isValid && value) {
+        switch (variable.variableName) {
+            case 'ecid':
+                // ハイフンを削除して数字のみにする
+                const ecidDigits = value.toString().replace(/-/g, '');
+                // 10桁の数字かチェック
+                if (!/^\d{10}$/.test(ecidDigits)) {
+                    isValid = false;
+                    errorMessage = 'ECIDは10桁の数字で入力してください（例: 1234567890 または 123-456-7890）';
+                }
+                // ECIDの場合はここで処理完了（validationRuleをスキップ）
+                break;
+            case 'email':
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.toString())) {
+                    isValid = false;
+                    errorMessage = '有効なメールアドレスを入力してください';
+                }
+                break;
+            default:
+                // 特別バリデーションがない場合は、パターンチェック
+                if (variable.validationRule) {
+                    const pattern = new RegExp(variable.validationRule);
+                    if (!pattern.test(value.toString())) {
+                        isValid = false;
+                        errorMessage = `${variable.displayName}の形式が正しくありません`;
+                    }
+                }
+                break;
+        }
+    }
+    
+    // UI更新
+    updateInputValidation(input, isValid, errorMessage);
+    
+    return isValid;
+}
+
+/**
+ * 入力バリデーション表示更新
+ */
+function updateInputValidation(input, isValid, errorMessage) {
+    // 親要素を取得（チェックボックスとラジオボタンは.form-checkが親）
+    const parent = input.closest('.mb-3') || input.closest('.form-check');
+
+    // 親要素が見つからない場合は処理をスキップ
+    if (!parent) {
+        console.warn('Parent element not found for input:', input);
+        return;
+    }
+
+    const invalidFeedback = parent.querySelector('.invalid-feedback');
+    const validFeedback = parent.querySelector('.valid-feedback');
+
+    if (isValid) {
+        input.classList.remove('is-invalid');
+        input.classList.add('is-valid');
+        if (invalidFeedback) invalidFeedback.textContent = '';
+        if (validFeedback) validFeedback.textContent = '正常に入力されています';
+    } else {
+        input.classList.remove('is-valid');
+        input.classList.add('is-invalid');
+        if (invalidFeedback) invalidFeedback.textContent = errorMessage;
+        if (validFeedback) validFeedback.textContent = '';
+
+        // 最初のエラーフィールドにフォーカス
+        if (!document.querySelector('.is-invalid:focus')) {
+            input.focus();
+        }
+    }
+}
+
+/**
+ * メール表示
+ */
+function displayEmail(response) {
+    const processingTime = Date.now() - generationStartTime;
+
+    // プレーンテキスト版を生成してdata属性に保存（コピー用）
+    const plainTextContent = convertToPlainText(response.content);
+    elements.emailPreview.setAttribute('data-raw-content', plainTextContent);
+
+    // HTML表示用にフォーマット
+    elements.emailPreview.innerHTML = formatEmailContent(response.content);
+
+    // メタ情報を設定
+    elements.usedTemplateName.textContent = response.templateName || currentTemplate;
+    elements.generationTime.textContent = new Date().toLocaleString('ja-JP');
+
+    // 文字数・行数（出力カード用）
+    const charCount2 = document.getElementById('charCount2');
+    const lineCount2 = document.getElementById('lineCount2');
+    if (charCount2) charCount2.textContent = response.content.length.toLocaleString();
+    if (lineCount2) lineCount2.textContent = response.content.split('\n').length.toLocaleString();
+
+    elements.processingTime.textContent = processingTime.toLocaleString();
+
+    // 出力カードを表示
+    elements.outputCard.style.display = 'block';
+    elements.outputCard.classList.add('fade-in');
+
+    // スクロール
+    elements.outputCard.scrollIntoView({ behavior: 'smooth' });
+
+    // 統計更新
+    stats.totalGenerated++;
+    stats.generatedToday++;
+    stats.lastGenerated = new Date();
+
+    updateStatisticsDisplay();
+}
+
+/**
+ * メール内容フォーマット（HTML表示用）
+ */
+function formatEmailContent(content) {
+    // リンク処理（HTML リンクに変換）
+    content = content.replace(/\{\{LINK:([^:]+)::([^}]+)\}\}/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+    );
+
+    return content
+        .replace(/\n/g, '<br>')
+        .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
+        .replace(/  /g, '&nbsp;&nbsp;');
+}
+
+/**
+ * コピー用プレーンテキスト変換
+ */
+function convertToPlainText(content) {
+    // リンク処理（プレーンテキストに変換）
+    return content.replace(/\{\{LINK:([^:]+)::([^}]+)\}\}/g, '$1 ($2)');
+}
+
+/**
+ * 必須項目のバリデーション
+ * @return {Array} 未入力の必須項目の配列
+ */
+function validateRequiredFields() {
+    const missingFields = [];
+
+    currentVariables.forEach(variable => {
+        if (variable.isRequired) {
+            const input = document.getElementById(variable.variableName);
+            if (!input) return;
+
+            const value = getInputValue(input);
+
+            // 値が空の場合
+            if (typeof value !== 'boolean' && (!value || value.toString().trim() === '')) {
+                missingFields.push(variable);
+                // UI更新（赤いエラー表示）
+                updateInputValidation(input, false, `${variable.displayName}は必須項目です`);
+            }
+        }
+    });
+
+    return missingFields;
+}
+
+/**
+ * メールコピー（ライブプレビューから）
+ */
+async function copyEmail() {
+    try {
+        // 必須項目のバリデーションチェック
+        const missingFields = validateRequiredFields();
+        if (missingFields.length > 0) {
+            const fieldNames = missingFields.map(f => f.displayName).join('、');
+            showToast('error', '必須項目未入力', `以下の必須項目を入力してください: ${fieldNames}`);
+
+            // 最初の未入力項目にフォーカス
+            const firstMissingInput = document.getElementById(missingFields[0].variableName);
+            if (firstMissingInput) {
+                firstMissingInput.focus();
+                firstMissingInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            return;
+        }
+
+        // ライブプレビューから生のテキストとHTMLコンテンツを取得
+        const livePreview = document.getElementById('livePreview');
+        const rawContent = livePreview.getAttribute('data-raw-content');
+        const htmlContent = livePreview.innerHTML;
+
+        if (!rawContent) {
+            showToast('warning', 'コピー失敗', 'コピーする内容がありません');
+            return;
+        }
+
+        // Clipboard APIを使用（リッチテキスト対応）
+        if (navigator.clipboard && navigator.clipboard.write) {
+            try {
+                // リッチテキスト（HTML）とプレーンテキストの両方をコピー
+                const clipboardItem = new ClipboardItem({
+                    'text/html': new Blob([htmlContent], { type: 'text/html' }),
+                    'text/plain': new Blob([rawContent], { type: 'text/plain' })
+                });
+                await navigator.clipboard.write([clipboardItem]);
+            } catch (clipboardError) {
+                // ClipboardItemが使えない場合はプレーンテキストのみコピー
+                console.warn('ClipboardItem not supported, falling back to plain text:', clipboardError);
+                await navigator.clipboard.writeText(rawContent);
+            }
+        } else {
+            // 古いブラウザのフォールバック（execCommand）
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = htmlContent;
+            tempDiv.style.position = 'fixed';
+            tempDiv.style.left = '-9999px';
+            document.body.appendChild(tempDiv);
+
+            const range = document.createRange();
+            range.selectNodeContents(tempDiv);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+
+            document.execCommand('copy');
+            document.body.removeChild(tempDiv);
+        }
+
+        showToast('success', 'コピー完了', 'メールがクリップボードにコピーされました');
+
+        // ステップ4に進む
+        updateStep(4);
+
+        // ボタンに一時的なフィードバック
+        const originalText = elements.copyBtn.innerHTML;
+        elements.copyBtn.innerHTML = '<i class="fas fa-check me-1"></i>コピー済み';
+        elements.copyBtn.classList.add('btn-success');
+        elements.copyBtn.classList.remove('btn-outline-light');
+
+        setTimeout(() => {
+            elements.copyBtn.innerHTML = originalText;
+            elements.copyBtn.classList.remove('btn-success');
+            elements.copyBtn.classList.add('btn-outline-light');
+        }, 2000);
+
+        // 入力フォームをリセット（ライブプレビューは維持）
+        resetInputFormOnly();
+
+    } catch (error) {
+        console.error('コピーエラー:', error);
+        showToast('error', 'コピーエラー', 'クリップボードへのコピーに失敗しました');
+    }
+}
+
+
+/**
+ * 入力フォームのみをリセット（ライブプレビューは維持）
+ * コピーボタンクリック時に使用
+ */
+function resetInputFormOnly() {
+    // ライブプレビューのイベントリスナーをクリーンアップ
+    cleanupLivePreview();
+
+    // フォームをリセット
+    const emailForm = document.getElementById('emailForm');
+    if (emailForm) {
+        emailForm.reset();
+    }
+
+    // 選択をリセット
+    elements.categorySelect.value = '';
+    elements.templateSelect.innerHTML = '<option value="">カテゴリを選択してください</option>';
+    elements.templateSelect.disabled = true;
+
+    // 検索バーをリセット
+    if (elements.templateSearchBar) {
+        elements.templateSearchBar.value = '';
+    }
+    if (elements.templateSearchContainer) {
+        elements.templateSearchContainer.style.display = 'none';
+    }
+    if (elements.templateSearchCount) {
+        elements.templateSearchCount.textContent = '';
+    }
+
+    // 動的フィールドをクリア
+    showInitialMessage();
+
+    // 状態をリセット
+    currentTemplate = null;
+    currentVariables = [];
+    currentCategoryTemplates = [];
+    hideTemplateInfo();
+
+    // バリデーションクラスをクリア
+    document.querySelectorAll('.is-valid, .is-invalid').forEach(el => {
+        el.classList.remove('is-valid', 'is-invalid');
+    });
+
+    // ステップ1に戻る
+    updateStep(1);
+}
+
+/**
+ * フォームクリア（メモリリーク防止版）
+ * リセットボタンクリック時に使用：入力フォームとライブプレビューの両方をリセット
+ */
+function clearForm() {
+    if (confirm('入力内容をクリアしますか？この操作は取り消せません。')) {
+        // 【最適化】ライブプレビューのイベントリスナーをクリーンアップ
+        cleanupLivePreview();
+
+        // フォームをリセット
+        document.getElementById('emailForm').reset();
+
+        // 選択をリセット
+        elements.categorySelect.value = '';
+        elements.templateSelect.innerHTML = '<option value="">カテゴリを選択してください</option>';
+        elements.templateSelect.disabled = true;
+
+        // 検索バーをリセット
+        if (elements.templateSearchBar) {
+            elements.templateSearchBar.value = '';
+        }
+        if (elements.templateSearchContainer) {
+            elements.templateSearchContainer.style.display = 'none';
+        }
+        if (elements.templateSearchCount) {
+            elements.templateSearchCount.textContent = '';
+        }
+
+        // 動的フィールドをクリア
+        showInitialMessage();
+
+        // 状態をリセット
+        currentTemplate = null;
+        currentVariables = [];
+        currentCategoryTemplates = [];
+        hideTemplateInfo();
+
+        // バリデーションクラスをクリア
+        document.querySelectorAll('.is-valid, .is-invalid').forEach(el => {
+            el.classList.remove('is-valid', 'is-invalid');
+        });
+
+        // ライブプレビューもクリア
+        const livePreview = document.getElementById('livePreview');
+        if (livePreview) {
+            livePreview.innerHTML = `
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-file-alt fa-2x mb-3"></i>
+                    <p>テンプレートを選択して入力を開始すると、<br>ここにリアルタイムでプレビューが表示されます</p>
+                </div>
+            `;
+            livePreview.removeAttribute('data-raw-content');
+        }
+
+        // プレビューメタ情報を非表示
+        const previewMeta = document.getElementById('previewMeta');
+        if (previewMeta) {
+            previewMeta.style.display = 'none';
+        }
+
+        // ステップ1に戻る
+        updateStep(1);
+
+        showToast('info', 'フォームクリア', '入力内容がクリアされました');
+    }
+}
+
+/**
+ * ダークモード切り替え
+ */
+function toggleDarkMode() {
+    isDarkMode = !isDarkMode;
+    applyTheme();
+    saveUserSettings();
+    
+    showToast('info', 'テーマ変更', `${isDarkMode ? 'ダーク' : 'ライト'}モードに切り替えました`);
+}
+
+/**
+ * テーマ適用
+ */
+function applyTheme() {
+    const body = document.body;
+    const modeToggle = elements.modeToggle;
+    
+    if (isDarkMode) {
+        body.classList.add('dark-mode');
+        body.classList.remove('light-mode');
+        body.setAttribute('data-bs-theme', 'dark');
+        modeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+        modeToggle.title = 'ライトモードに切り替え';
+    } else {
+        body.classList.add('light-mode');
+        body.classList.remove('dark-mode');
+        body.setAttribute('data-bs-theme', 'light');
+        modeToggle.innerHTML = '<i class="fas fa-moon"></i>';
+        modeToggle.title = 'ダークモードに切り替え';
+    }
+}
+
+/**
+ * サーバー関数呼び出し（自動リトライ機構付き）
+ * @param {string} functionName - 呼び出す関数名
+ * @param {Object} params - パラメータ
+ * @param {number} maxRetries - 最大リトライ回数（デフォルト: 3）
+ * @param {number} retryDelay - リトライ間隔（ミリ秒、デフォルト: 1000）
+ */
+async function callServerFunction(functionName, params = {}, maxRetries = 3, retryDelay = 1000) {
+    let lastError = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const result = await callServerFunctionOnce(functionName, params);
+
+            // 成功した場合
+            if (attempt > 0) {
+                console.log(`✓ Server call succeeded on attempt ${attempt + 1}/${maxRetries + 1}`);
+            }
+            return result;
+
+        } catch (error) {
+            lastError = error;
+            console.warn(`✗ Server call failed (attempt ${attempt + 1}/${maxRetries + 1}):`, error.message);
+
+            // 最後の試行でない場合は待機してリトライ
+            if (attempt < maxRetries) {
+                console.log(`⟳ Retrying in ${retryDelay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                // 指数バックオフ: 次回は待機時間を1.5倍に
+                retryDelay = Math.floor(retryDelay * 1.5);
+            }
+        }
+    }
+
+    // すべてのリトライが失敗した場合
+    console.error(`✗ All ${maxRetries + 1} attempts failed for ${functionName}`);
+    throw lastError;
+}
+
+/**
+ * サーバー関数呼び出し（単発）
+ * @private
+ */
+function callServerFunctionOnce(functionName, params = {}) {
+    return new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+            reject(new Error('Request timeout'));
+        }, 30000); // 30秒タイムアウト
+
+        try {
+            const runner = google.script.run
+                .withSuccessHandler(response => {
+                    clearTimeout(timeoutId);
+                    resolve(response);
+                })
+                .withFailureHandler(error => {
+                    clearTimeout(timeoutId);
+                    reject(new Error(error.message || error.toString()));
+                });
+
+            // 関数名に応じてサーバー関数を呼び出し（エイリアス関数を使用）
+            switch (functionName) {
+                case 'getTemplates':
+                    runner.getTemplates(params);
+                    break;
+                case 'getVariables':
+                    runner.getVariables(params);
+                    break;
+                case 'getOptions':
+                    runner.getOptions(params);
+                    break;
+                case 'generateEmail':
+                    runner.generateEmail(params);
+                    break;
+                case 'getTemplateContent':
+                    runner.getTemplateContent(params.templateId);
+                    break;
+                case 'getTemplateCategories':
+                    runner.getTemplateCategories();
+                    break;
+                case 'getAllTemplatesData':
+                    runner.getAllTemplatesData();
+                    break;
+                case 'validateTemplate':
+                    runner.validateTemplate(params.templateId);
+                    break;
+                case 'getSystemStatus':
+                    runner.getSystemStatus();
+                    break;
+                default:
+                    throw new Error(`Unknown function: ${functionName}`);
+            }
+        } catch (error) {
+            clearTimeout(timeoutId);
+            reject(error);
+        }
+    });
+}
+
+/**
+ * Toast通知表示
+ */
+function showToast(type, title, message) {
+    const toastElement = document.getElementById(`${type}Toast`);
+    if (!toastElement) return;
+    
+    const titleElement = toastElement.querySelector('.toast-header strong');
+    const bodyElement = toastElement.querySelector('.toast-body');
+    
+    if (titleElement) titleElement.textContent = title;
+    if (bodyElement) bodyElement.textContent = message;
+    
+    const toast = new bootstrap.Toast(toastElement, {
+        autohide: true,
+        delay: type === 'error' ? 8000 : 5000
+    });
+    
+    toast.show();
+}
+
+/**
+ * 進捗表示
+ */
+function showProgress(message, percentage = 0) {
+    if (elements.generationProgress) {
+        elements.generationProgress.classList.remove('d-none');
+    }
+    if (elements.progressBar) {
+        elements.progressBar.style.width = `${percentage}%`;
+    }
+    if (elements.progressText) {
+        elements.progressText.textContent = message;
+    }
+}
+
+/**
+ * 進捗非表示
+ */
+function hideProgress() {
+    setTimeout(() => {
+        if (elements.generationProgress) {
+            elements.generationProgress.classList.add('d-none');
+        }
+    }, 500);
+}
+
+/**
+ * 生成状態更新
+ */
+function updateGenerationState(generating) {
+    const generateBtn = elements.generateBtn;
+
+    if (!generateBtn) return;
+
+    if (generating) {
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>生成中...';
+        updateSystemStatus({ status: 'generating', message: 'Generating...' });
+    } else {
+        generateBtn.disabled = false;
+        generateBtn.innerHTML = '<i class="fas fa-magic me-2"></i>メール生成';
+        updateSystemStatus({ status: 'ready', message: 'Ready' });
+    }
+}
+
+/**
+ * システムステータス更新
+ */
+function updateSystemStatus(status) {
+    // statusがオブジェクトでない場合や、statusプロパティがない場合はデフォルト値を使用
+    if (!status || typeof status !== 'object' || !status.status) {
+        status = { status: 'ready', message: 'Ready' };
+    }
+
+    systemStatus = status;
+
+    const indicator = elements.statusIndicator;
+    const text = elements.statusText;
+
+    if (!indicator || !text) return;
+
+    // インジケーター色を更新
+    indicator.className = 'fas fa-circle';
+
+    switch (status.status) {
+        case 'ready':
+            indicator.classList.add('text-success');
+            text.textContent = 'Ready';
+            break;
+        case 'loading':
+        case 'generating':
+            indicator.classList.add('text-info');
+            text.textContent = 'Processing';
+            break;
+        case 'error':
+            indicator.classList.add('text-danger');
+            text.textContent = 'Error';
+            break;
+        case 'warning':
+            indicator.classList.add('text-warning');
+            text.textContent = 'Warning';
+            break;
+        default:
+            // デフォルトはreadyステータス
+            indicator.classList.add('text-success');
+            text.textContent = 'Ready';
+    }
+}
+
+/**
+ * 統計情報更新
+ */
+async function updateStatistics() {
+    try {
+        // 今日の生成数を更新
+        const today = new Date().toDateString();
+        const lastUpdate = localStorage.getItem('stats_last_update');
+        
+        if (lastUpdate !== today) {
+            // 日付が変わった場合、今日の生成数をリセット
+            stats.generatedToday = 0;
+            localStorage.setItem('stats_last_update', today);
+        }
+        
+        // 統計情報を保存
+        localStorage.setItem('stats_total', stats.totalGenerated.toString());
+        localStorage.setItem('stats_today', stats.generatedToday.toString());
+        
+        updateStatisticsDisplay();
+        
+    } catch (error) {
+        console.error('統計更新エラー:', error);
+    }
+}
+
+/**
+ * 統計表示更新
+ */
+function updateStatisticsDisplay() {
+    if (elements.totalTemplates) {
+        elements.totalTemplates.textContent = currentVariables.length.toString();
+    }
+    
+    if (elements.generatedToday) {
+        elements.generatedToday.textContent = stats.generatedToday.toString();
+    }
+}
+
+/**
+ * 初期メッセージ表示
+ */
+function showInitialMessage() {
+    elements.dynamicFields.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-arrow-up text-muted fa-2x mb-3"></i>
+            <p class="text-muted">カテゴリとテンプレートを選択すると、入力フィールドが表示されます。</p>
+        </div>
+    `;
+
+    // クリアボタンを非表示
+    const clearBtnContainer = document.getElementById('clearBtnContainer');
+    if (clearBtnContainer) {
+        clearBtnContainer.style.display = 'none';
+    }
+}
+
+/**
+ * テンプレート情報表示
+ */
+function showTemplateInfo(templateId) {
+    elements.templateInfo.classList.remove('d-none');
+    elements.currentTemplateName.textContent = elements.templateSelect.options[elements.templateSelect.selectedIndex].text;
+}
+
+/**
+ * テンプレート情報非表示
+ */
+function hideTemplateInfo() {
+    elements.templateInfo.classList.add('d-none');
+}
+
+/**
+ * カテゴリ選択肢設定
+ */
+function populateCategories(categories) {
+    // 既存のオプションをクリア
+    elements.categorySelect.innerHTML = '<option value="">選択してください</option>';
+    
+    // カテゴリを追加
+    Object.keys(categories).forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        elements.categorySelect.appendChild(option);
+    });
+}
+
+/**
+ * テンプレート選択肢設定
+ */
+function populateTemplates(templates) {
+    elements.templateSelect.innerHTML = '<option value="">選択してください</option>';
+    
+    templates.forEach(template => {
+        const option = document.createElement('option');
+        option.value = template.templateId;
+        option.textContent = template.templateName;
+        elements.templateSelect.appendChild(option);
+    });
+}
+
+/**
+ * ユーザー設定読み込み
+ */
+async function loadUserSettings() {
+    try {
+        const savedSettings = localStorage.getItem('policyPlaybook_settings');
+        if (savedSettings) {
+            userSettings = JSON.parse(savedSettings);
+        } else {
+            userSettings = {
+                darkMode: false,
+                defaultName: ''
+            };
+        }
+
+        isDarkMode = userSettings.darkMode;
+
+        // 統計情報を読み込み
+        stats.totalGenerated = parseInt(localStorage.getItem('stats_total') || '0');
+        stats.generatedToday = parseInt(localStorage.getItem('stats_today') || '0');
+
+    } catch (error) {
+        console.error('設定読み込みエラー:', error);
+    }
+}
+
+/**
+ * ユーザー設定保存
+ */
+function saveUserSettings() {
+    try {
+        userSettings.darkMode = isDarkMode;
+        localStorage.setItem('policyPlaybook_settings', JSON.stringify(userSettings));
+    } catch (error) {
+        console.error('設定保存エラー:', error);
+    }
+}
+
+/**
+ * 最近使用したテンプレート読み込み
+ */
+function loadRecentTemplates() {
+    try {
+        const saved = localStorage.getItem('policyPlaybook_recent');
+        if (saved) {
+            recentTemplates = JSON.parse(saved);
+            updateRecentTemplatesDisplay();
+        }
+    } catch (error) {
+        console.error('最近使用テンプレート読み込みエラー:', error);
+    }
+}
+
+/**
+ * 最近使用したテンプレートに追加
+ */
+function addToRecentTemplates(templateId) {
+    try {
+        // 既存の項目を削除
+        recentTemplates = recentTemplates.filter(item => item.templateId !== templateId);
+        
+        // 先頭に追加
+        recentTemplates.unshift({
+            templateId: templateId,
+            templateName: elements.templateSelect.options[elements.templateSelect.selectedIndex].text,
+            category: elements.categorySelect.value,
+            usedAt: new Date().toISOString()
+        });
+        
+        // 最大10件に制限
+        recentTemplates = recentTemplates.slice(0, 10);
+        
+        // 保存
+        localStorage.setItem('policyPlaybook_recent', JSON.stringify(recentTemplates));
+        
+        // 表示更新
+        updateRecentTemplatesDisplay();
+        
+    } catch (error) {
+        console.error('最近使用テンプレート追加エラー:', error);
+    }
+}
+
+/**
+ * 最近使用したテンプレート表示更新
+ */
+function updateRecentTemplatesDisplay() {
+    if (!elements.recentTemplates) return;
+    
+    if (recentTemplates.length === 0) {
+        elements.recentTemplates.innerHTML = '<small class="text-muted">履歴がありません</small>';
+        return;
+    }
+    
+    const html = recentTemplates.map(item => `
+        <div class="recent-template-item" data-template-id="${item.templateId}" data-category="${item.category}">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="fw-semibold">${item.templateName}</div>
+                    <small class="text-muted">${item.category}</small>
+                </div>
+                <small class="text-muted">${new Date(item.usedAt).toLocaleDateString('ja-JP')}</small>
+            </div>
+        </div>
+    `).join('');
+    
+    elements.recentTemplates.innerHTML = html;
+    
+    // クリックイベントを追加
+    elements.recentTemplates.querySelectorAll('.recent-template-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const templateId = item.dataset.templateId;
+            const category = item.dataset.category;
+            
+            // カテゴリを選択
+            elements.categorySelect.value = category;
+            elements.categorySelect.dispatchEvent(new Event('change'));
+            
+            // テンプレートを選択（少し遅延）
+            setTimeout(() => {
+                elements.templateSelect.value = templateId;
+                elements.templateSelect.dispatchEvent(new Event('change'));
+            }, 500);
+        });
+    });
+}
+
+/**
+ * キーボードショートカット処理
+ */
+function handleKeyboardShortcuts(event) {
+    // Ctrl+Enter: メール生成
+    if (event.ctrlKey && event.key === 'Enter') {
+        event.preventDefault();
+        if (elements.generateBtn && !elements.generateBtn.disabled) {
+            generateEmail();
+        }
+    }
+
+    // Ctrl+R: フォームリセット
+    if (event.ctrlKey && event.key === 'r') {
+        event.preventDefault();
+        clearForm();
+    }
+
+    // Ctrl+C: コピー（出力エリアにフォーカスがある場合）
+    if (event.ctrlKey && event.key === 'c' && elements.outputCard.style.display !== 'none') {
+        if (document.activeElement === elements.emailPreview) {
+            event.preventDefault();
+            copyEmail();
+        }
+    }
+
+    // Esc: モーダルを閉じる
+    if (event.key === 'Escape') {
+        const openModals = document.querySelectorAll('.modal.show');
+        openModals.forEach(modal => {
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+        });
+    }
+}
+
+/**
+ * フォーカス処理
+ */
+function handleFocusIn(event) {
+    // アクセシビリティ向上のため、フォーカスされた要素をハイライト
+    event.target.classList.add('focus-visible');
+}
+
+function handleFocusOut(event) {
+    event.target.classList.remove('focus-visible');
+}
+
+/**
+ * ページ離脱時の確認
+ */
+function handleBeforeUnload(event) {
+    if (currentTemplate && document.querySelector('.form-control:not([value=""])')) {
+        event.preventDefault();
+        event.returnValue = '入力内容が保存されていません。本当にページを離れますか？';
+        return event.returnValue;
+    }
+}
+
+
+/**
+ * バリデーション設定
+ */
+function setupFormValidation() {
+    const form = document.getElementById('emailForm');
+    const inputs = form.querySelectorAll('input, select, textarea');
+
+    inputs.forEach(input => {
+        input.addEventListener('blur', () => {
+            const value = getInputValue(input);
+            // 入力がある場合、または既にエラーが表示されている場合のみバリデーション
+            if (value || input.classList.contains('is-invalid') || input.classList.contains('is-valid')) {
+                validateInput(input, value);
+            }
+        });
+
+        input.addEventListener('input', () => {
+            const value = getInputValue(input);
+            // 入力がある場合、または既にバリデーション済みの場合はリアルタイムバリデーション
+            if (value || input.classList.contains('is-invalid') || input.classList.contains('is-valid')) {
+                validateInput(input, value);
+            }
+        });
+    });
+}
+
+
+/**
+ * ヘルプ表示
+ */
+function showHelp() {
+    const helpModal = new bootstrap.Modal(document.getElementById('helpModal'));
+    helpModal.show();
+}
+
+/**
+ * 設定表示
+ */
+function showSettings() {
+    // 現在の設定を表示
+    document.getElementById('defaultName').value = userSettings.defaultName || '';
+
+    const settingsModal = new bootstrap.Modal(document.getElementById('settingsModal'));
+    settingsModal.show();
+}
+
+/**
+ * 設定保存
+ */
+function saveSettings() {
+    try {
+        userSettings.defaultName = document.getElementById('defaultName').value;
+
+        saveUserSettings();
+
+        showToast('success', '設定保存', '設定が保存されました');
+
+        // モーダルを閉じる
+        const settingsModal = bootstrap.Modal.getInstance(document.getElementById('settingsModal'));
+        settingsModal.hide();
+
+    } catch (error) {
+        console.error('設定保存エラー:', error);
+        showToast('error', '設定保存エラー', '設定の保存に失敗しました');
+    }
+}
+
+/**
+ * プレビュー生成
+ */
+function generatePreview(formData) {
+    // 簡易的なプレビュー生成
+    let preview = `テンプレート: ${currentTemplate}\n\n`;
+    
+    Object.keys(formData).forEach(key => {
+        const variable = currentVariables.find(v => v.variableName === key);
+        if (variable) {
+            preview += `${variable.displayName}: ${formData[key]}\n`;
+        }
+    });
+    
+    return preview;
+}
+
+/**
+ * プレビューモーダル表示
+ */
+function showPreviewModal(preview) {
+    // プレビュー用のモーダルを動的に作成
+    const modalHTML = `
+        <div class="modal fade" id="previewModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-eye me-2"></i>プレビュー
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <pre class="email-preview">${preview}</pre>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+                        <button type="button" class="btn btn-primary" onclick="generateEmail(); bootstrap.Modal.getInstance(document.getElementById('previewModal')).hide();">
+                            <i class="fas fa-magic me-2"></i>メール生成
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 既存のプレビューモーダルを削除
+    const existingModal = document.getElementById('previewModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // 新しいモーダルを追加
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // モーダルを表示
+    const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
+    previewModal.show();
+}
+
+// エラーハンドリング
+window.addEventListener('error', function(event) {
+    console.error('JavaScript Error:', event.error);
+    showToast('error', 'システムエラー', 'システムエラーが発生しました');
+});
+
+window.addEventListener('unhandledrejection', function(event) {
+    console.error('Unhandled Promise Rejection:', event.reason);
+    showToast('error', 'システムエラー', 'システムエラーが発生しました');
+});
+
+// パフォーマンス監視
+if (window.performance) {
+    window.addEventListener('load', function() {
+        const loadTime = window.performance.timing.loadEventEnd - window.performance.timing.navigationStart;
+        console.log(`Page load time: ${loadTime}ms`);
+    });
+}
+
+// サービスワーカー登録（PWA対応）
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+        // 必要に応じてサービスワーカーを登録
+        // navigator.serviceWorker.register('/sw.js');
+    });
+}
+
+/**
+ * [削除済み] カテゴリ検索機能（現在は無効化 - セレクトボックスを使用）
+ */
+
+/**
+ * [削除済み] テンプレート検索機能（現在は無効化 - セレクトボックスを使用）
+ */
+
+/**
+ * 全テンプレートデータを読み込み（検索機能用）
+ */
+async function loadAllTemplatesData() {
+    try {
+        const response = await callServerFunction('getAllTemplatesData');
+
+        if (response && response.success && response.data) {
+            allTemplatesData = response.data;
+            console.log(`Loaded ${allTemplatesData.length} templates for search`);
+        } else {
+            console.warn('Failed to load all templates data:', response?.error);
+            allTemplatesData = [];
+        }
+    } catch (error) {
+        console.error('Error loading all templates data:', error);
+        allTemplatesData = [];
+    }
+}
+
+/**
+ * テンプレート検索バー入力時の処理
+ */
+function onTemplateSearch() {
+    const keyword = elements.templateSearchBar.value.toLowerCase().trim();
+    const selectedCategory = elements.categorySelect.value;
+
+    if (!selectedCategory) {
+        return;
+    }
+
+    // 現在のカテゴリのテンプレートから検索
+    let filteredTemplates = currentCategoryTemplates;
+
+    // キーワードがある場合は絞り込み
+    if (keyword) {
+        filteredTemplates = currentCategoryTemplates.filter(template =>
+            template.templateName.toLowerCase().includes(keyword)
+        );
+    }
+
+    // セレクトボックスを更新
+    updateTemplateSelect(filteredTemplates);
+
+    // 該当件数を更新
+    updateTemplateSearchCount(filteredTemplates.length);
+}
+
+/**
+ * テンプレートセレクトボックスを更新
+ */
+function updateTemplateSelect(templates) {
+    elements.templateSelect.innerHTML = '<option value="">----- テンプレートを選択 -----</option>';
+
+    templates.forEach(template => {
+        const option = document.createElement('option');
+        option.value = template.templateId;
+        option.textContent = template.templateName;
+        elements.templateSelect.appendChild(option);
+    });
+
+    // テンプレートが0件の場合
+    if (templates.length === 0) {
+        elements.templateSelect.innerHTML = '<option value="">該当するテンプレートがありません</option>';
+    }
+}
+
+/**
+ * テンプレート検索の該当件数を更新
+ * @param {number} count - 該当件数
+ * @param {boolean} clear - クリアフラグ（trueの場合は表示を消去）
+ */
+function updateTemplateSearchCount(count, clear = false) {
+    if (elements.templateSearchCount) {
+        if (clear) {
+            elements.templateSearchCount.textContent = '';
+        } else {
+            elements.templateSearchCount.textContent = `(該当テンプレート: ${count} 件)`;
+        }
+    }
+}
+
+/**
+ * カテゴリ選択
+ */
+function selectCategory(category) {
+    // 検索フィールドに値を設定（存在する場合のみ）
+    if (elements.categorySearch) {
+        elements.categorySearch.value = category;
+    }
+    elements.categorySelect.value = category;
+
+    // 検索結果を非表示（存在する場合のみ）
+    if (elements.categorySearchResults) {
+        elements.categorySearchResults.classList.add('d-none');
+    }
+
+    // テンプレート検索を有効化（存在する場合のみ）
+    if (elements.templateSearch) {
+        elements.templateSearch.disabled = false;
+        elements.templateSearch.placeholder = 'テンプレートを入力して検索...';
+    }
+
+    // カテゴリ変更処理を実行
+    onCategoryChange();
+}
+
+/**
+ * テンプレート選択
+ */
+function selectTemplate(templateId) {
+    // テンプレートを検索
+    const template = window.currentTemplates?.find(t => t.templateId === templateId);
+    if (!template) return;
+
+    // 検索フィールドに値を設定（存在する場合のみ）
+    if (elements.templateSearch) {
+        elements.templateSearch.value = template.templateName;
+    }
+    elements.templateSelect.value = templateId;
+
+    // 検索結果を非表示（存在する場合のみ）
+    if (elements.templateSearchResults) {
+        elements.templateSearchResults.classList.add('d-none');
+    }
+
+    // テンプレート変更処理を実行
+    onTemplateChange();
+}
+
+/**
+ * 検索結果外クリックで閉じる
+ */
+function closeSearchResults(e) {
+    if (!e.target.closest('.position-relative')) {
+        if (elements.categorySearchResults) {
+            elements.categorySearchResults.classList.add('d-none');
+        }
+        if (elements.templateSearchResults) {
+            elements.templateSearchResults.classList.add('d-none');
+        }
+    }
+}
+
+
+/**
+ * ライブプレビューのセットアップ（最適化版 - イベントリスナー重複防止）
+ */
+function setupLivePreview() {
+    const form = document.getElementById('emailForm');
+    if (!form) {
+        console.error('emailForm not found');
+        return;
+    }
+
+    const inputs = form.querySelectorAll('input, select, textarea');
+
+    if (!inputs || inputs.length === 0) {
+        console.warn('No inputs found in form');
+        return;
+    }
+
+    // 【最適化】既存のリスナーを削除してから追加（重複防止）
+    inputs.forEach(input => {
+        // data属性でリスナー登録状態を管理
+        if (input.dataset.livePreviewAttached === 'true') {
+            // 既にリスナーが登録済みの場合はスキップ
+            return;
+        }
+
+        // デバウンス関数を保存（removeEventListenerで使用するため）
+        // 高速化: 150ms → 100ms
+        const debouncedUpdate = debounce(updateLivePreview, 100);
+        input._livePreviewHandlers = {
+            input: debouncedUpdate,
+            change: updateLivePreview
+        };
+
+        input.addEventListener('input', input._livePreviewHandlers.input);
+        input.addEventListener('change', input._livePreviewHandlers.change);
+
+        // 登録済みフラグを設定
+        input.dataset.livePreviewAttached = 'true';
+    });
+
+    // 初回プレビュー更新
+    updateLivePreview();
+}
+
+/**
+ * ライブプレビューのクリーンアップ（メモリリーク防止）
+ */
+function cleanupLivePreview() {
+    const form = document.getElementById('emailForm');
+    if (!form) return;
+
+    const inputs = form.querySelectorAll('input, select, textarea');
+
+    inputs.forEach(input => {
+        if (input._livePreviewHandlers) {
+            input.removeEventListener('input', input._livePreviewHandlers.input);
+            input.removeEventListener('change', input._livePreviewHandlers.change);
+            delete input._livePreviewHandlers;
+        }
+        delete input.dataset.livePreviewAttached;
+    });
+}
+
+/**
+ * ライブプレビュー更新（ローカル処理のみ、高速）
+ */
+function updateLivePreview() {
+    const formData = collectFormData();
+    const templateContent = window.currentTemplateContent || '';
+
+    if (!templateContent) {
+        return;
+    }
+
+    // 入力が開始されたらステップ3に進む
+    const hasInput = Object.values(formData).some(value => value && value.toString().trim() !== '');
+    if (hasInput && currentStep === 2) {
+        updateStep(3);
+    }
+
+    // ローカルで即座にプレビュー生成（変数置換のみ）
+    const previewContent = renderLocalLivePreview(templateContent, formData);
+
+    const livePreview = document.getElementById('livePreview');
+    livePreview.innerHTML = previewContent;
+
+    // メタ情報を更新
+    const plainText = convertTemplateToPlainText(templateContent, formData);
+    livePreview.setAttribute('data-raw-content', plainText);
+    updatePreviewMeta(plainText);
+    document.getElementById('previewMeta').style.display = 'block';
+}
+
+/**
+ * ローカルライブプレビューレンダリング（高速、変数置換のみ）
+ */
+function renderLocalLivePreview(templateContent, formData) {
+    let content = templateContent;
+
+    // HTMLエスケープ
+    content = content
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    // リンク処理（マークダウン形式をHTMLリンクに変換）
+    content = content.replace(/\[([^\]]+)\]\(([^)]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+    );
+
+    // 【修正】特殊変数の処理（{{today}}, {{ecid}}など）
+    content = processSpecialVariables(content, formData);
+
+    // 変数を置換（ハイライト付き）
+    currentVariables.forEach(variable => {
+        let value = formData[variable.variableName];
+        const regex = new RegExp(`{{\\s*${variable.variableName}\\s*}}`, 'g');
+
+        // ECID変数の特別処理（フォーマット適用）
+        if (variable.variableName === 'ecid' || variable.variableName === 'certEcid') {
+            value = formatECID(value);
+        }
+
+        // フッター変数の特別処理
+        if (variable.variableName === 'footer') {
+            // チェックボックスがチェックされている場合のみフッターを追加
+            if (value === true || value === 'true' || value === 'TRUE') {
+                if (activeFooter && activeFooter.footer_content) {
+                    // HTMLエスケープしたフッター内容を追加（ハイライト付き）
+                    const escapedFooter = activeFooter.footer_content
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/\n/g, '<br>');
+                    // フッター全体をハイライト表示
+                    value = '<br><br><span class="variable-filled" title="フッター">' + escapedFooter + '</span>';
+                } else {
+                    value = '';
+                }
+            } else {
+                value = '';
+            }
+        }
+
+        // セレクトボックス、チェックボックス、ラジオの場合、value→label変換
+        if (variable.variableType === 'select' || variable.variableType === 'checkbox' || variable.variableType === 'radio') {
+            // footer変数は上記で処理済みなのでスキップ
+            if (variable.variableName !== 'footer') {
+                const options = variableOptionsCache[variable.variableName];
+                if (options && value !== undefined && value !== null) {
+                    // Boolean型の場合は "TRUE"/"FALSE" に変換してから比較
+                    let compareValue = value;
+                    if (typeof value === 'boolean') {
+                        compareValue = value ? "TRUE" : "FALSE";
+                    } else {
+                        compareValue = String(value);
+                    }
+
+                    // 両方の値を大文字の文字列に変換して比較（データ型の違いを吸収）
+                    const matchedOption = options.find(opt =>
+                        String(opt.value).toUpperCase() === compareValue.toUpperCase()
+                    );
+
+                    if (matchedOption) {
+                        value = matchedOption.label;
+                    }
+                }
+            }
+        }
+
+        if (value !== undefined && value !== null && (variable.variableName === 'footer' || String(value).trim() !== '')) {
+            // 入力済み: 緑色でハイライト（フッター変数の場合はHTML込みで表示）
+            if (variable.variableName === 'footer') {
+                content = content.replace(regex, value);
+            } else {
+                const escapedValue = String(value);
+                content = content.replace(regex,
+                    `<span class="variable-filled" title="${variable.displayName}">${escapedValue}</span>`
+                );
+            }
+        } else {
+            // 未入力: 黄色でハイライト
+            content = content.replace(regex,
+                `<span class="variable-placeholder" title="未入力: ${variable.displayName}">{{${variable.variableName}}}</span>`
+            );
+        }
+    });
+
+    // 改行をHTMLに変換
+    return content.replace(/\n/g, '<br>');
+}
+
+/**
+ * 特殊変数の処理（{{today}}, {{formattedReplyDate}}）
+ * @param {string} content - コンテンツ
+ * @param {Object} formData - フォームデータ
+ * @return {string} 処理済みコンテンツ
+ */
+function processSpecialVariables(content, formData) {
+    // 今日の日付（M月d日 20時形式）
+    const today = new Date();
+    const month = today.getMonth() + 1;
+    const day = today.getDate();
+    const todayFormatted = `${month} 月 ${day} 日`;
+
+    // {{today}} を置換
+    content = content.replace(/\{\{\s*today\s*\}\}/g,
+        `<span class="variable-filled" title="本日の日付">${todayFormatted}</span>`
+    );
+
+    // {{formattedReplyDate}} を処理
+    if (formData.replyDate) {
+        const replyDate = new Date(formData.replyDate);
+        const replyMonth = replyDate.getMonth() + 1;
+        const replyDay = replyDate.getDate();
+        const formattedReply = `${replyMonth} 月 ${replyDay} 日`;
+
+        content = content.replace(/\{\{\s*formattedReplyDate\s*\}\}/g,
+            `<span class="variable-filled" title="返信予定日">${formattedReply}</span>`
+        );
+    } else {
+        // replyDateが未入力の場合は変数名のまま表示
+        content = content.replace(/\{\{\s*formattedReplyDate\s*\}\}/g,
+            `<span class="variable-placeholder" title="未入力: 返信予定日">{{formattedReplyDate}}</span>`
+        );
+    }
+
+    return content;
+}
+
+/**
+ * ECIDフォーマット（XXX-XXX-XXXX形式）
+ * @param {string} ecid - ECID
+ * @return {string} フォーマット済みECID
+ */
+function formatECID(ecid) {
+    if (!ecid) return ecid;
+
+    // 文字列に変換
+    let ecidStr = String(ecid);
+
+    // ハイフンを削除して数字のみにする（入力形式に関わらず統一処理）
+    ecidStr = ecidStr.replace(/[^0-9]/g, '');
+
+    // 10桁の場合、XXX-XXX-XXXX形式にフォーマット
+    if (ecidStr.length === 10) {
+        return `${ecidStr.substring(0, 3)}-${ecidStr.substring(3, 6)}-${ecidStr.substring(6, 10)}`;
+    }
+
+    // 10桁でない場合はそのまま返す
+    return ecidStr;
+}
+
+/**
+ * テンプレートをプレーンテキストに変換（コピー用）
+ */
+function convertTemplateToPlainText(templateContent, formData) {
+    let content = templateContent;
+
+    // リンク処理（プレーンテキスト）- テキストの直後に改行してURLを表示
+    content = content.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1\n$2');
+
+    // 【修正】特殊変数の処理（プレーンテキスト版）
+    const today = new Date();
+    const month = today.getMonth() + 1;
+    const day = today.getDate();
+    const todayFormatted = `${month} 月 ${day} 日`;
+    content = content.replace(/\{\{\s*today\s*\}\}/g, todayFormatted);
+
+    // {{formattedReplyDate}} を処理
+    if (formData.replyDate) {
+        const replyDate = new Date(formData.replyDate);
+        const replyMonth = replyDate.getMonth() + 1;
+        const replyDay = replyDate.getDate();
+        const formattedReply = `${replyMonth} 月 ${replyDay} 日`;
+        content = content.replace(/\{\{\s*formattedReplyDate\s*\}\}/g, formattedReply);
+    }
+
+    // 変数を置換
+    currentVariables.forEach(variable => {
+        let value = formData[variable.variableName];
+        const regex = new RegExp(`{{\\s*${variable.variableName}\\s*}}`, 'g');
+
+        // ECID変数の特別処理（フォーマット適用）
+        if (variable.variableName === 'ecid' || variable.variableName === 'certEcid') {
+            value = formatECID(value);
+        }
+
+        // フッター変数の特別処理
+        if (variable.variableName === 'footer') {
+            // チェックボックスがチェックされている場合のみフッターを追加
+            if (value === true || value === 'true' || value === 'TRUE') {
+                if (activeFooter && activeFooter.footer_content) {
+                    value = '\n\n' + activeFooter.footer_content;
+                } else {
+                    value = '';
+                }
+            } else {
+                value = '';
+            }
+        }
+
+        // セレクトボックス、チェックボックス、ラジオの場合、value→label変換
+        if (variable.variableType === 'select' || variable.variableType === 'checkbox' || variable.variableType === 'radio') {
+            // footer変数は上記で処理済みなのでスキップ
+            if (variable.variableName !== 'footer') {
+                const options = variableOptionsCache[variable.variableName];
+                if (options && value !== undefined && value !== null) {
+                    let compareValue = value;
+                    if (typeof value === 'boolean') {
+                        compareValue = value ? "TRUE" : "FALSE";
+                    } else {
+                        compareValue = String(value);
+                    }
+
+                    const matchedOption = options.find(opt =>
+                        String(opt.value).toUpperCase() === compareValue.toUpperCase()
+                    );
+
+                    if (matchedOption) {
+                        value = matchedOption.label;
+                    }
+                }
+            }
+        }
+
+        if (value !== undefined && value !== null) {
+            content = content.replace(regex, value);
+        }
+    });
+
+    return content;
+}
+
+/**
+ * プレビューメタ情報更新
+ */
+function updatePreviewMeta(content) {
+    const charCount = content.length;
+    const lineCount = content.split('\n').length;
+
+    document.getElementById('charCount').textContent = charCount.toLocaleString();
+    document.getElementById('lineCount').textContent = lineCount.toLocaleString();
+}
+
+/**
+ * デバウンス関数
+ */
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+/**
+ * === Material 3 Step Management ===
+ */
+
+/**
+ * ステップを更新
+ */
+function updateStep(stepNumber) {
+    if (stepNumber < 1 || stepNumber > totalSteps) return;
+
+    currentStep = stepNumber;
+
+    // すべてのステップをリセット
+    for (let i = 1; i <= totalSteps; i++) {
+        const step = document.getElementById(`step-${i}`);
+        if (!step) continue;
+
+        step.classList.remove('active', 'completed');
+
+        if (i < stepNumber) {
+            // 完了したステップ
+            step.classList.add('completed');
+            const circle = step.querySelector('.step-circle');
+            if (circle) {
+                circle.innerHTML = '<i class="fas fa-check"></i>';
+            }
+        } else if (i === stepNumber) {
+            // 現在のステップ
+            step.classList.add('active');
+            const circle = step.querySelector('.step-circle');
+            if (circle) {
+                circle.textContent = i;
+            }
+        } else {
+            // 未完了のステップ
+            const circle = step.querySelector('.step-circle');
+            if (circle) {
+                circle.textContent = i;
+            }
+        }
+    }
+}
+
+/**
+ * 次のステップに進む
+ */
+function nextStep() {
+    if (currentStep < totalSteps) {
+        updateStep(currentStep + 1);
+    }
+}
+
+/**
+ * 前のステップに戻る
+ */
+function previousStep() {
+    if (currentStep > 1) {
+        updateStep(currentStep - 1);
+    }
+}
+
+console.log('PolicyPlayBook Frontend Script Loaded - Material 3 Expressive Edition');
+</script>
