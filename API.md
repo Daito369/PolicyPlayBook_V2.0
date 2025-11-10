@@ -501,7 +501,8 @@ google.script.run
   "status": "0",
   "replyDate": "2025-11-15",
   "additionalNotes": "追加の確認事項があります",
-  "footer": true
+  "footer": true,
+  "disclaimer": true
 }
 ```
 
@@ -520,7 +521,8 @@ google.script.run
       "replyDate": "2025-11-15",
       "formattedReplyDate": "2025年11月15日（金）",
       "today": "2025-11-10",
-      "footer": "Google広告サポートチーム"
+      "footer": "Google広告サポートチーム",
+      "disclaimer": "※本メールは自動送信されたものです。返信いただいてもお答えできませんので、ご了承ください。\n※本情報は予告なく変更される場合がございます。最新情報は公式サイトをご確認ください。"
     },
     "template_id": "review_approved",
     "generated_at": "2025-11-10T10:30:45+09:00"
@@ -1256,6 +1258,9 @@ function collectFormData() {
 
   // フッター追加
   variables.footer = document.getElementById('includeFooter')?.checked || true;
+
+  // 免責事項追加
+  variables.disclaimer = document.getElementById('includeDisclaimer')?.checked || false;
 
   return variables;
 }

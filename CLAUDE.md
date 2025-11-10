@@ -182,6 +182,9 @@ statusText = statusMap[status]
 // footer: true → アクティブなフッター内容を挿入
 footer = getActiveFooter().content
 
+// disclaimer: true → Optionsシートから免責事項内容を挿入、false → 空文字
+disclaimer = getOptionsByVariable('disclaimer').find(opt => opt.value === 'TRUE').label
+
 // replyDate: null → 次の営業日を自動計算
 formattedReplyDate = getNextBusinessDay()
 ```

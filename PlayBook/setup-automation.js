@@ -345,7 +345,8 @@ function insertVariablesData(spreadsheet) {
     ['certName', '認定の種類', 'text', true, '', '', 'オンラインギャンブル関連広告', 'サートの種類を入力（語呂が悪いサートは手動で調整してください）', 15, true],
     ['certEcid', '認定アカウント', 'text', true, '', '', '123-456-7890', '認定されたアカウントの ID を入力してください', 16, true],
     ['certDomain', '認定ドメイン', 'text', true, '', '', 'google.com', '認定されたドメインを入力してください', 17, true],
-    ['footer', 'フッターを追加', 'checkbox', false, 'false', '', '', '年末年始やGWなどの営業時間を記載したフッターを追加', 18, true]
+    ['footer', 'フッターを追加', 'checkbox', false, 'false', '', '', '年末年始やGWなどの営業時間を記載したフッターを追加', 18, true],
+    ['disclaimer', '免責事項を追加', 'checkbox', false, 'false', '', '', '免責事項を追加する場合はチェック', 19, true]
   ];
 
   sheet.getRange(2, 1, data.length, data[0].length).setValues(data);
@@ -373,7 +374,9 @@ function insertOptionsData(spreadsheet) {
     ['adtype', 'アセットグループ', 'アセットグループ', 2, true, ''],
     ['delayReason', '1', '現在確認を行っておりますが、窓口混雑のため調査完了までにお時間を頂戴しております。', 1, true, ''],
     ['delayReason', '2', '現在社内で確認中の状況でございます。', 2, true, ''],
-    ['delayReason', '3', '引き続き担当部署へ確認中の状況でございます。', 3, true, '']
+    ['delayReason', '3', '引き続き担当部署へ確認中の状況でございます。', 3, true, ''],
+    ['disclaimer', 'TRUE', '※本メールは自動送信されたものです。返信いただいてもお答えできませんので、ご了承ください。\n※本情報は予告なく変更される場合がございます。最新情報は公式サイトをご確認ください。', 1, true, ''],
+    ['disclaimer', 'FALSE', '', 2, true, '']
   ];
 
   sheet.getRange(2, 1, data.length, data[0].length).setValues(data);

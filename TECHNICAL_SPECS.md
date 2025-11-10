@@ -387,6 +387,20 @@ FOREIGN KEY: variable_name
   ON UPDATE CASCADE
 ```
 
+**使用例（disclaimer変数）:**
+```javascript
+// disclaimerチェックボックスの設定例
+// Variables.variable_name = 'disclaimer', variable_type = 'checkbox'
+
+// Optionsシートのデータ:
+['disclaimer', 'TRUE', '※本メールは自動送信されたものです。返信いただいてもお答えできませんので、ご了承ください。\n※本情報は予告なく変更される場合がございます。最新情報は公式サイトをご確認ください。', 1, true, '']
+['disclaimer', 'FALSE', '', 2, true, '']
+
+// テンプレート処理:
+// disclaimer = true  → option_labelの内容を{{disclaimer}}に挿入
+// disclaimer = false → {{disclaimer}}を空文字で置換
+```
+
 ### Footers シート
 
 **カラム定義:**
