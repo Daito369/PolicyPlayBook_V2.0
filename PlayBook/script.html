@@ -2330,10 +2330,39 @@ function renderLocalLivePreview(templateContent, formData) {
             }
         }
 
+        // 免責事項変数の特別処理
+        if (variable.variableName === 'disclaimer') {
+            // チェックボックスがチェックされている場合のみ免責事項を追加
+            if (value === true || value === 'true' || value === 'TRUE') {
+                const disclaimerOptions = variableOptionsCache['disclaimer'];
+                if (disclaimerOptions) {
+                    const trueOption = disclaimerOptions.find(opt =>
+                        String(opt.value).toUpperCase() === 'TRUE'
+                    );
+                    if (trueOption && trueOption.label) {
+                        // HTMLエスケープした免責事項内容を追加（ハイライト付き）
+                        const escapedDisclaimer = trueOption.label
+                            .replace(/&/g, '&amp;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;')
+                            .replace(/\n/g, '<br>');
+                        // 免責事項全体をハイライト表示
+                        value = '<br><br><span class="variable-filled" title="免責事項">' + escapedDisclaimer + '</span>';
+                    } else {
+                        value = '';
+                    }
+                } else {
+                    value = '';
+                }
+            } else {
+                value = '';
+            }
+        }
+
         // セレクトボックス、チェックボックス、ラジオの場合、value→label変換
         if (variable.variableType === 'select' || variable.variableType === 'checkbox' || variable.variableType === 'radio') {
-            // footer変数は上記で処理済みなのでスキップ
-            if (variable.variableName !== 'footer') {
+            // footer と disclaimer は上記で処理済みなのでスキップ
+            if (variable.variableName !== 'footer' && variable.variableName !== 'disclaimer') {
                 const options = variableOptionsCache[variable.variableName];
                 if (options && value !== undefined && value !== null) {
                     // Boolean型の場合は "TRUE"/"FALSE" に変換してから比較
@@ -2356,9 +2385,9 @@ function renderLocalLivePreview(templateContent, formData) {
             }
         }
 
-        if (value !== undefined && value !== null && (variable.variableName === 'footer' || String(value).trim() !== '')) {
-            // 入力済み: 緑色でハイライト（フッター変数の場合はHTML込みで表示）
-            if (variable.variableName === 'footer') {
+        if (value !== undefined && value !== null && (variable.variableName === 'footer' || variable.variableName === 'disclaimer' || String(value).trim() !== '')) {
+            // 入力済み: 緑色でハイライト（フッター・免責事項変数の場合はHTML込みで表示）
+            if (variable.variableName === 'footer' || variable.variableName === 'disclaimer') {
                 content = content.replace(regex, value);
             } else {
                 const escapedValue = String(value);
@@ -2373,6 +2402,12 @@ function renderLocalLivePreview(templateContent, formData) {
             );
         }
     });
+
+    // 未置換の footer と disclaimer 変数を空文字で置換（フォールバック処理）
+    // currentVariablesに含まれていない場合でも、テンプレートに{{footer}}や{{disclaimer}}が
+    // 含まれている可能性があるため、ここで確実に削除する
+    content = content.replace(/\{\{\s*footer\s*\}\}/g, '');
+    content = content.replace(/\{\{\s*disclaimer\s*\}\}/g, '');
 
     // 改行をHTMLに変換
     return content.replace(/\n/g, '<br>');
@@ -2488,10 +2523,32 @@ function convertTemplateToPlainText(templateContent, formData) {
             }
         }
 
+        // 免責事項変数の特別処理
+        if (variable.variableName === 'disclaimer') {
+            // チェックボックスがチェックされている場合のみ免責事項を追加
+            if (value === true || value === 'true' || value === 'TRUE') {
+                const disclaimerOptions = variableOptionsCache['disclaimer'];
+                if (disclaimerOptions) {
+                    const trueOption = disclaimerOptions.find(opt =>
+                        String(opt.value).toUpperCase() === 'TRUE'
+                    );
+                    if (trueOption && trueOption.label) {
+                        value = '\n\n' + trueOption.label;
+                    } else {
+                        value = '';
+                    }
+                } else {
+                    value = '';
+                }
+            } else {
+                value = '';
+            }
+        }
+
         // セレクトボックス、チェックボックス、ラジオの場合、value→label変換
         if (variable.variableType === 'select' || variable.variableType === 'checkbox' || variable.variableType === 'radio') {
-            // footer変数は上記で処理済みなのでスキップ
-            if (variable.variableName !== 'footer') {
+            // footer と disclaimer は上記で処理済みなのでスキップ
+            if (variable.variableName !== 'footer' && variable.variableName !== 'disclaimer') {
                 const options = variableOptionsCache[variable.variableName];
                 if (options && value !== undefined && value !== null) {
                     let compareValue = value;
@@ -2516,6 +2573,12 @@ function convertTemplateToPlainText(templateContent, formData) {
             content = content.replace(regex, value);
         }
     });
+
+    // 未置換の footer と disclaimer 変数を空文字で置換（フォールバック処理）
+    // currentVariablesに含まれていない場合でも、テンプレートに{{footer}}や{{disclaimer}}が
+    // 含まれている可能性があるため、ここで確実に削除する
+    content = content.replace(/\{\{\s*footer\s*\}\}/g, '');
+    content = content.replace(/\{\{\s*disclaimer\s*\}\}/g, '');
 
     return content;
 }
