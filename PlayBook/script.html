@@ -2346,8 +2346,8 @@ function renderLocalLivePreview(templateContent, formData) {
                             .replace(/</g, '&lt;')
                             .replace(/>/g, '&gt;')
                             .replace(/\n/g, '<br>');
-                        // 免責事項全体をハイライト表示
-                        value = '<br><br><span class="variable-filled" title="免責事項">' + escapedDisclaimer + '</span>';
+                        // 免責事項全体をハイライト表示（テンプレート内で既に改行があるため前に改行を追加しない）
+                        value = '<span class="variable-filled" title="免責事項">' + escapedDisclaimer + '</span>';
                     } else {
                         value = '';
                     }
@@ -2533,7 +2533,8 @@ function convertTemplateToPlainText(templateContent, formData) {
                         String(opt.value).toUpperCase() === 'TRUE'
                     );
                     if (trueOption && trueOption.label) {
-                        value = '\n\n' + trueOption.label;
+                        // テンプレート内で既に改行があるため前に改行を追加しない
+                        value = trueOption.label;
                     } else {
                         value = '';
                     }
