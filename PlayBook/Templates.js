@@ -167,6 +167,15 @@ class TemplateEngine {
   preprocessVariables(variables) {
     let processed = { ...variables };
 
+    // footer と disclaimer のデフォルト値を設定（未定義の場合）
+    // テンプレートに{{footer}}や{{disclaimer}}が含まれていても、変数が渡されない場合があるため
+    if (processed.footer === undefined || processed.footer === null) {
+      processed.footer = '';
+    }
+    if (processed.disclaimer === undefined || processed.disclaimer === null) {
+      processed.disclaimer = '';
+    }
+
     // ECID フォーマット処理
     if (processed.ecid) {
       processed.formattedECID = formatECID(processed.ecid);
@@ -202,7 +211,7 @@ class TemplateEngine {
         logWarning('Footer checkbox is checked but no active footer found');
       }
     } else {
-      // チェックされていない場合は空文字に（テンプレート内の{{footer}}を空文字で置換）
+      // チェックされていない場合、または未定義の場合は空文字に（テンプレート内の{{footer}}を空文字で置換）
       processed.footer = '';
     }
 
@@ -234,7 +243,7 @@ class TemplateEngine {
         processed.disclaimer = '';
       }
     } else {
-      // チェックされていない場合は空文字に（テンプレート内の{{disclaimer}}を空文字で置換）
+      // チェックされていない場合、または未定義の場合は空文字に（テンプレート内の{{disclaimer}}を空文字で置換）
       processed.disclaimer = '';
     }
 
@@ -562,16 +571,21 @@ class TemplateEngine {
    */
   postProcessContent(content) {
     let processed = content;
-    
+
+    // 未置換の footer と disclaimer 変数を空文字で置換（フォールバック処理）
+    // preprocessVariables()で処理されるはずだが、念のため残っている場合を処理
+    processed = processed.replace(/\{\{\s*footer\s*\}\}/g, '');
+    processed = processed.replace(/\{\{\s*disclaimer\s*\}\}/g, '');
+
     // 空行の整理
     processed = processed.replace(/\n\s*\n\s*\n/g, '\n\n');
-    
+
     // 先頭末尾の空白削除
     processed = processed.trim();
-    
+
     // HTMLエスケープ（必要な場合）
     // processed = this.escapeHtml(processed);
-    
+
     return processed;
   }
   
