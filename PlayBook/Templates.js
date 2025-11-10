@@ -206,6 +206,38 @@ class TemplateEngine {
       processed.footer = '';
     }
 
+    // 免責事項処理（チェックボックスがtrueの場合のみ免責事項内容を設定）
+    if (processed.disclaimer === true || processed.disclaimer === 'true' || processed.disclaimer === 'TRUE') {
+      try {
+        // Optionsシートからdisclaimerのオプションを取得
+        const disclaimerOptions = this.db.getOptionsByVariable('disclaimer');
+
+        if (disclaimerOptions && disclaimerOptions.length > 0) {
+          // option_value が "TRUE" のものを探す
+          const trueOption = disclaimerOptions.find(opt =>
+            String(opt.value).toUpperCase() === 'TRUE'
+          );
+
+          if (trueOption && trueOption.label) {
+            processed.disclaimer = trueOption.label;
+            logInfo('Disclaimer content loaded and applied');
+          } else {
+            processed.disclaimer = '';
+            logWarning('Disclaimer checkbox is checked but no TRUE option label found');
+          }
+        } else {
+          processed.disclaimer = '';
+          logWarning('Disclaimer checkbox is checked but no options found');
+        }
+      } catch (error) {
+        logError('Failed to load disclaimer options', error);
+        processed.disclaimer = '';
+      }
+    } else {
+      // チェックされていない場合は空文字に（テンプレート内の{{disclaimer}}を空文字で置換）
+      processed.disclaimer = '';
+    }
+
     // 選択肢テキスト変換
     processed = this.convertSelectOptionsToText(processed);
 
