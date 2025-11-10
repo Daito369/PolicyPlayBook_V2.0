@@ -273,6 +273,11 @@ class TemplateEngine {
 
       // 検出された変数ごとに変換処理
       for (const varName of selectVariableNames) {
+        // footer と disclaimer は preprocessVariables() で特別処理済みなのでスキップ
+        if (varName === 'footer' || varName === 'disclaimer') {
+          continue;
+        }
+
         if (processed[varName] !== undefined) {
           try {
             // DatabaseService を使って Options シートから定義を取得
